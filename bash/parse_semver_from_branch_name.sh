@@ -2,7 +2,7 @@
 
 # Check if the branch name is in the correct format
 function psfbn_validate_branch_name() {
-  if [[ $1 =~ ^(R|r)elease/(R|r)?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*))*$ ]]; then
+  if [[ $1 =~ ^(.*(R|r)elease/)?(R|r)?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*))*$ ]]; then
     echo "$1"
   else
     echo ""
@@ -11,7 +11,7 @@ function psfbn_validate_branch_name() {
 
 # Extract the version number from the branch name
 function psfbn_parse_release_version() {
-  local semver=$(echo "$1" | xargs | tr '[:upper:]' '[:lower:]' | sed -n 's/^release\/r\([0-9]*\.[0-9]*\(\.[0-9]*\)*\)$/\1/p')
+  local semver=$(echo "$1" | xargs | tr '[:upper:]' '[:lower:]' | sed -n 's/^.*r\([0-9]*\.[0-9]*\(\.[0-9]*\)*\)$/\1/p')
   if [[ "$semver" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*))*$ ]]; then
     echo "$semver"
   else
@@ -19,7 +19,7 @@ function psfbn_parse_release_version() {
   fi
   return 0
 }
-
+ 
 # Print usage
 function psfbn_print_usage() {
   echo
@@ -49,8 +49,8 @@ function psfbn_print_usage() {
 # Test cases are comprised of valid branch name prefixes, invalid branch name prefixes, accepted semantic versions, and semantic versions not accepted
 
 psfbn_test() {
-  local valid_prefixes=("Release/R" "release/R" "Release/r" "release/r")
-  local invalid_prefixes=("R" "r" "R/" "r/" "R/r" "r/R" "RELEASE/" "RELEASE" "REleasE/" "REleasE" "RELEASE/R" "REleasE/R" "Release/ R"  "Release/R "Release/v"  "Release/V" " "/" " " "." "v")
+  local valid_prefixes=("Release/R" "release/R" "Release/r" "release/r" "refs/heads/Release/R" "refs/heads/release/R" "refs/heads/Release/r" "refs/heads/release/r")
+  local invalid_prefixes=("R/" "r/" "R/r" "r/R" "RELEASE" "REleasE/" "REleasE" "RELEASE/R" "REleasE/R" "Release/ R" "Release/v"  "Release/V" "/" "." "v")
   local valid_semvers=("5.2.1" "5.2" "0.0.0" "0.0" "0.0.1" "1.1.0" "255.256.257" "5.2.1.1")
   local invalid_semvers=("5" "5." "5.2." "0")
 
@@ -167,7 +167,7 @@ function psfbn_main() {
   fi
 
   if [ -z "$1" ]; then
-    echo "Error: Missing branch name"
+    echo "Error: Missing branch name" >&2
     return 1
   fi
 
@@ -175,37 +175,45 @@ function psfbn_main() {
 
   # Check if the branch name is in the correct format
   if [ $VERBOSE = true ]; then
-    echo "\tChecking if the branch name '$BRANCH' is in a valid format ..."
+    echo "Checking if the branch name '$BRANCH' is in a valid format ..."
   fi
 
   local check_branch_name=$(psfbn_validate_branch_name $BRANCH)
 
   if [ -z "$check_branch_name" ]; then
-    echo "\t\tError: The branch $BRANCH is not in a valid format" >&2;
-    echo "\t\t\tThe branch name must be in the form '(R|r)elease/(R|r)#.#.#', e.g. 'Release/R5.2.1'"
-    # exit 1
+    echo "Error: The branch $BRANCH is not in a valid format" >&2;
+    echo "The branch name must be in the form '(R|r)elease/(R|r)#.#.#', e.g. 'Release/R5.2.1'"
+    exit 1
   fi
 
   if [ $VERBOSE = true ]; then
-    echo "\t\t$BRANCH is a valid release branch"
+    echo "  $BRANCH is a valid release branch"
   fi
 
   # Extract the version number from the branch name
   if [ $VERBOSE = true ]; then
-    echo "\tParsing version from release branch name $BRANCH ..."
+    echo
+    echo "Parsing version from release branch name $BRANCH ..."
   fi
 
   local RELEASE_VERSION=$(psfbn_parse_release_version $BRANCH)
 
   if [ $VERBOSE = true ]; then
-    echo "\t\tRelease version: $RELEASE_VERSION"
+    echo "  Release version: $RELEASE_VERSION"
   else
     echo $RELEASE_VERSION
   fi
 
   # Set the parsed version as output in Azure Pipelines
   if [ $AZP_OUTPUT = true ]; then
-    echo "##vso[task.setvariable variable=releaseVersion;isoutput=true]$RELEASE_VERSION"
+    if [ $VERBOSE = true ]; then
+      echo "Setting output variable releaseBranchVersion ..."
+    fi
+      echo "##vso[task.setvariable variable=releaseBranchVersion;isoutput=true]$RELEASE_VERSION"
+    if [ $VERBOSE = true ]; then
+      echo "  Done"
+      echo
+    fi
   fi
 }
 
